@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/farkle
+farkle.so
+farkle.dylib
+farkle.dll
+farkle.a
+farkle.lib
+farkle-test-*
+*.exe
+*.o
+*.obj
+*.lst
