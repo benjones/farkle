@@ -131,7 +131,9 @@ struct Farkle {
             return LabeledScore(1500, "three doublets");
         } else {
             auto oaf = onesAndFives(groups);
-            return oaf.score > 0 ? oaf : LabeledScore(0, toScore.length == 6 ? "hard farkle" : "farkle");
+            return oaf.score > 0 ? oaf : LabeledScore(0, toScore.length == 6 ? "hard farkle" :
+                                                      toScore.length == 5 ? "pretty bad farkle" :
+                                                      "farkle");
         }
 
 
@@ -197,11 +199,16 @@ unittest {
                          RollResult([1,1,1], LabeledScore(300, "three 1's")),
                          RollResult([5], LabeledScore(50, "1 5's")),
                          RollResult([5, 5, 1], LabeledScore(200, "1 1's and 2 5's")),
-                         RollResult([4, 4, 4, 1], LabeledScore(500, "three 4's and 1 1's"))
+                         RollResult([4, 4, 4, 1], LabeledScore(500, "three 4's and 1 1's")),
+                         RollResult([2,3,4,6], LabeledScore(0, "farkle")),
+                         RollResult([2,3,4,6,2], LabeledScore(0, "pretty bad farkle"))
                          ];
     foreach(roll; partialRolls){
         writeln("dice: ", roll.dice, " f.scoreRoll: ", f.scoreDice(roll.dice), " expected: ", roll.expected);
         assert(f.scoreDice(roll.dice) == roll.expected);
     }
+
+    import vibe.data.json;
+    writeln(f.serializeToJsonString);
     
 }
