@@ -1,6 +1,15 @@
 ///Data structures for the game and functions that operate on it
 module farkle;
 
+import std.stdio : writeln;
+import std.conv : to;
+import std.algorithm : map;
+import std.range;
+
+import vibe.http.websockets : WebSocket;
+import vibe.data.json;
+
+import sumtype;
 
 struct Die {
 
@@ -9,20 +18,41 @@ struct Die {
 }
 
 struct Player {
-    import vibe.http.websockets : WebSocket;
+    @safe: 
     string name;
     int score;
     WebSocket ws;
+
+    Json toJson(){
+        auto ret = Json.emptyObject;
+        ret["name"] = name;
+        ret["score"] = score.serializeToJson;
+        ret["ws"] = ws.toHash;
+        return ret;
+    }
+
+    static Player fromJson(Json src){
+        assert(false, "not supported");
+    }
 }
 
+///roll the dice, these are the ones that are held now
 struct Roll {
     int[] newHolds;
 }
 
+///keep the score from this turn so far
+struct Stay {}
+
+///roll all 6 dice
+struct NewRoll{}
+
+alias Move = SumType!(Roll, Stay, NewRoll);
+
 struct LabeledScore {
     int score;
     string description;
-
+    @safe:
     LabeledScore opBinary(string op)(LabeledScore other) if(op == "+"){
         auto maybeAnd = other.description.length > 0 ? " and " : "";
         return LabeledScore(score + other.score, description ~ maybeAnd ~ other.description);
@@ -36,6 +66,19 @@ struct Farkle {
         size_t whoseTurn;
     }
 
+    //for serialization
+    Json toJson(){
+        auto ret = Json.emptyObject;
+        ret["dice"] = dice.serializeToJson;
+        ret["players"] = players.serializeToJson;
+        ret["whoseTurn"] = whoseTurn;
+        return ret;
+    }
+    static Json fromJson(Json src){
+        assert(false, "not supported");
+    }
+    
+    
     void addPlayer(Player p){
         import std.array : insertInPlace;
         import std.range : empty;
@@ -45,8 +88,38 @@ struct Farkle {
         } else {
             players.insertInPlace(whoseTurn + 1, p);
         }
+        writeln("players: ", players.map!(a => a.toJson));
+        writeln("it's " ~ to!string(whoseTurn) ~ "'s turn");
+    }
+    
+    void removePlayer(WebSocket socket){
+        import std.algorithm : find;
+        import std.array : replaceInPlace;
+        auto found = players.find!(a => a.ws == socket);
+        auto index = players.length - found.length;
+        players.replaceInPlace(index, index + 1, cast(Player[])[]);
+        writeln("players: ", players.map!(a => a.toJson));
+        writeln("it's " ~ to!string(whoseTurn) ~ "'s turn");
+        assert(whoseTurn < players.length);
     }
 
+    Player getPlayer(WebSocket socket){
+        import std.algorithm : find;
+        return players.find!(a => a.ws == socket).front;
+    }
+
+    bool isMyTurn(WebSocket socket){
+        return players[whoseTurn].ws == socket;
+    }
+
+    void takeAction(Move move){
+        move.match!(
+                    (Roll r) => roll(r),
+                    (Stay s) => stay(),
+                    (NewRoll nr) => newRoll()
+                    );
+    }
+    
     void roll(Roll roll){
         import std.random : uniform;
         
@@ -60,6 +133,14 @@ struct Farkle {
         }
     }
 
+    void stay(){
+
+    }
+
+    void newRoll(){
+        
+    }
+    
     //start who's turn clean by rolling all 6 dice
     void newTurn(){
         foreach(ref die; dice){
@@ -70,7 +151,7 @@ struct Farkle {
 
     
     LabeledScore scoreRoll(){
-        import std.algorithm;
+        import std.algorithm : filter;
         import std.array;
         
         int[] toScore = dice[].filter!(x => !x.held).map!(x => x.showing).array;
@@ -209,6 +290,6 @@ unittest {
     }
 
     import vibe.data.json;
-    writeln(f.serializeToJsonString);
+    writeln(f.toJson);
     
 }

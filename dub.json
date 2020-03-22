@@ -4,7 +4,8 @@
 	],
 	"copyright": "Copyright © 2020, Ben Jones",
 	"dependencies": {
-		"vibe-d": "~>0.8.2"
+	    "vibe-d": "~>0.8.2",
+            "sumtype": "0.9.4"
 	},
 	"description": "A web farkle game",
 	"license": "MIT",

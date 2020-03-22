@@ -1,6 +1,13 @@
 module websocketservice;
 
-import vibe.vibe;
+import room;
+import vibe.web.common : path;
+import vibe.http.websockets : WebSocket;
+import vibe.web.web : redirect;
+import vibe.core.log;
+import vibe.core.core : runTask;
+import vibe.data.json;
+
 
 class WebsocketService {
     @path("/") void getHome()
@@ -10,15 +17,31 @@ class WebsocketService {
     }
 
 	@path("/ws") void getWebsocket(scope WebSocket socket){
-		int counter = 0;
-		logInfo("Got new web socket connection.");
-		while (true) {
-			sleep(1.seconds);
-			if (!socket.connected) break;
-			counter++;
-			logInfo("Sending '%s'.", counter);
-			socket.send(counter.to!string);
+        logInfo("ws connected");
+        auto room = getRoom();
+        logInfo("joining room");
+        room.join("name", socket);
+        logInfo("joined");
+
+        auto bg = runTask({
+                
+                while(socket.connected){
+                    auto jo = room.listenForBroadcast();
+                    socket.send(jo.toString);
+                }
+                
+            });
+
+        
+		while (socket.waitForData) {
+            auto message = socket.receiveText();
+            auto jo = parseJson(message);
+            if(room.isMyTurn(socket)){
+                room.takeTurn(socket,jo);
+            }
 		}
+        logInfo("leaving room");
+        room.leave(socket);
 		logInfo("Client disconnected.");
 	}
 }
