@@ -3,11 +3,12 @@ module farkle;
 
 import std.stdio : writeln;
 import std.conv : to;
-import std.algorithm : map;
+import std.algorithm : map, filter, find;
 import std.range;
 
 import vibe.http.websockets : WebSocket;
 import vibe.data.json;
+import vibe.core.log;
 
 import sumtype;
 
@@ -16,6 +17,8 @@ struct Die {
     int showing;
     bool held; 
 }
+
+enum FirstTurnMinScore = 500;
 
 struct Player {
     @safe: 
@@ -51,11 +54,15 @@ alias Move = SumType!(Roll, Stay, NewRoll);
 
 struct LabeledScore {
     int score;
+    int diceUsed;
     string description;
+
+    
     @safe:
     LabeledScore opBinary(string op)(LabeledScore other) if(op == "+"){
         auto maybeAnd = other.description.length > 0 ? " and " : "";
-        return LabeledScore(score + other.score, description ~ maybeAnd ~ other.description);
+        return LabeledScore(score + other.score, diceUsed + other.diceUsed,
+                            description ~ maybeAnd ~ other.description);
     }
 }
 
@@ -64,6 +71,9 @@ struct Farkle {
         Die[6] dice;
         Player[] players;
         size_t whoseTurn;
+        int turnScore;
+        LabeledScore[] scoringDice;
+        bool startOfTurn;
     }
 
     //for serialization
@@ -72,6 +82,7 @@ struct Farkle {
         ret["dice"] = dice.serializeToJson;
         ret["players"] = players.serializeToJson;
         ret["whoseTurn"] = whoseTurn;
+        ret["turnScore"] = turnScore;
         return ret;
     }
     static Json fromJson(Json src){
@@ -93,7 +104,6 @@ struct Farkle {
     }
     
     void removePlayer(WebSocket socket){
-        import std.algorithm : find;
         import std.array : replaceInPlace;
         auto found = players.find!(a => a.ws == socket);
         auto index = players.length - found.length;
@@ -104,7 +114,6 @@ struct Farkle {
     }
 
     Player getPlayer(WebSocket socket){
-        import std.algorithm : find;
         return players.find!(a => a.ws == socket).front;
     }
 
@@ -112,6 +121,35 @@ struct Farkle {
         return players[whoseTurn].ws == socket;
     }
 
+    bool legalMove(Move move){
+        return move.match!(
+                    (Roll r) => legalRoll(r),
+                    (Stay s) => legalStay(),
+                    (NewRoll nr) => legalNewRoll()
+                           );
+    }
+
+    bool legalRoll(Roll roll){
+        auto heldScore = scoreDice(roll.newHolds);
+        return heldScore.score > 0;
+    }
+
+    bool legalStay(){
+
+        int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
+        const showingScore = scoreDice(showingDice);
+        return players[whoseTurn].score >= FirstTurnMinScore ||
+            (turnScore + showingScore.score) >= FirstTurnMinScore;
+    }
+
+    bool legalNewRoll(){
+        if(startOfTurn) return true;
+        int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
+        const showingScore = scoreDice(showingDice);
+        return showingScore.diceUsed == showingDice.length;
+        
+    }
+    
     void takeAction(Move move){
         move.match!(
                     (Roll r) => roll(r),
@@ -120,12 +158,19 @@ struct Farkle {
                     );
     }
     
+    
     void roll(Roll roll){
         import std.random : uniform;
+
+        const heldScore = scoreDice(roll.newHolds);
         
         foreach(hold; roll.newHolds){
             dice[hold].held = true;
         }
+
+        turnScore += heldScore.score;
+        scoringDice ~= heldScore;
+        
         foreach(ref die; dice){
             if(!die.held){
                 die.showing = uniform!"[]"(1,6);
@@ -134,7 +179,14 @@ struct Farkle {
     }
 
     void stay(){
+        if(players[whoseTurn].score < FirstTurnMinScore && turnScore < FirstTurnMinScore){
+            logInfo("can't stay... Must have at least " ~ to!string(FirstTurnMinScore)
+                    ~ " to get on the board");
+            return;
+        }
 
+        players[whoseTurn].score += turnScore;
+        whoseTurn = (whoseTurn +1) % players.length;
     }
 
     void newRoll(){
@@ -143,15 +195,11 @@ struct Farkle {
     
     //start who's turn clean by rolling all 6 dice
     void newTurn(){
-        foreach(ref die; dice){
-            die.held = false;
-        }
-        roll(Roll([]));
+        //TBD
     }
 
     
     LabeledScore scoreRoll(){
-        import std.algorithm : filter;
         import std.array;
         
         int[] toScore = dice[].filter!(x => !x.held).map!(x => x.showing).array;
@@ -173,10 +221,12 @@ struct Farkle {
             foreach(g; gs){
                 if(g[0] == 1){
                     ret.score += 100*g[1];
+                    ret.diceUsed += g[1];
                     auto maybeAnd = ret.description.length > 0 ? " and " : "";
                     ret.description = to!string(g[1]) ~ " 1's" ~ maybeAnd ~ ret.description;
                 } else if(g[0] == 5){
                     ret.score += 50*g[1];
+                    ret.diceUsed += g[1];
                     auto maybeAnd = ret.description.length > 0 ? " and " : "";
                     ret.description ~= maybeAnd ~ to!string(g[1]) ~ " 5's";
                 }
@@ -187,32 +237,34 @@ struct Farkle {
         writeln("groups: ", groups);
         if(groups.length == 6){
             //straight
-            return LabeledScore(3000, "straight");
+            return LabeledScore(3000, 6, "straight");
         } else if(groups[0][1] == 6){
-            return LabeledScore(3000, "six " ~ to!string(groups[0][0]) ~ "'s");
+            return LabeledScore(3000, 6, "six " ~ to!string(groups[0][0]) ~ "'s");
         }else if(groups[0][1] == 5){
-            return LabeledScore(2000, "five " ~ to!string(groups[0][0]) ~ "'s")
+            return LabeledScore(2000, 5, "five " ~ to!string(groups[0][0]) ~ "'s")
                 + onesAndFives(groups[1 .. $]);
         } else if (groups[0][1] == 4){
             if(groups.length > 1 && groups[1][1] == 2){
-                return LabeledScore(1500, "three doublets");
+                return LabeledScore(1500, 6, "three doublets");
             } else {
-                return LabeledScore(1000, "four " ~ to!string(groups[0][0]) ~ "'s") +
+                return LabeledScore(1000, 4, "four " ~ to!string(groups[0][0]) ~ "'s") +
                     onesAndFives(groups[1 .. $]);
             }
         } else if (groups[0][1] == 3) {
             if(groups.length > 1 && groups[1][1] == 3){
-                return LabeledScore(2500, "two triplets");
+                return LabeledScore(2500, 6, "two triplets");
             } else {
                 return LabeledScore(groups[0][0] == 1 ? 300 : 100*groups[0][0],
+                                    3,
                                     "three " ~ to!string(groups[0][0]) ~ "'s") +
                     onesAndFives(groups[1 .. $]);
             }
         } else if(groups.length > 2 && groups[2][1] == 2) {
-            return LabeledScore(1500, "three doublets");
+            return LabeledScore(1500, 6, "three doublets");
         } else {
             auto oaf = onesAndFives(groups);
-            return oaf.score > 0 ? oaf : LabeledScore(0, toScore.length == 6 ? "hard farkle" :
+            return oaf.score > 0 ? oaf : LabeledScore(0, 0,
+                                                      toScore.length == 6 ? "hard farkle" :
                                                       toScore.length == 5 ? "pretty bad farkle" :
                                                       "farkle");
         }
@@ -256,19 +308,19 @@ unittest {
     }
     
     auto rolls = [
-                  RollResult([1,2,3,4,5,6], LabeledScore(3000, "straight")),
-                  RollResult([2,3,6,5,4,1], LabeledScore(3000, "straight")),
-                  RollResult([2,2,2,2,3,2], LabeledScore(2000, "five 2's")),
-                  RollResult([1,2,2,2,2,2], LabeledScore(2100, "five 2's and 1 1's")),
-                  RollResult([2,3,2,3,2,3], LabeledScore(2500, "two triplets")),
-                  RollResult([2,2,2,3,4,4], LabeledScore(200, "three 2's")),
-                  RollResult([2,2,2,1,1,4], LabeledScore(400, "three 2's and 2 1's")),
-                  RollResult([2,2,2,2,3,3], LabeledScore(1500, "three doublets")),
-                  RollResult([2,2,3,3,4,4], LabeledScore(1500, "three doublets")),
-                  RollResult([2,2,2,2,3,4], LabeledScore(1000, "four 2's")),
-                  RollResult([2,2,2,2,1,5], LabeledScore(1150, "four 2's and 1 1's and 1 5's")),
-                  RollResult([1,2,1,5,5,3], LabeledScore(300, "2 1's and 2 5's")),
-                  RollResult([2,3,4,6,6,2], LabeledScore(0, "hard farkle"))
+                  RollResult([1,2,3,4,5,6], LabeledScore(3000, 6, "straight")),
+                  RollResult([2,3,6,5,4,1], LabeledScore(3000, 6, "straight")),
+                  RollResult([2,2,2,2,3,2], LabeledScore(2000, 5, "five 2's")),
+                  RollResult([1,2,2,2,2,2], LabeledScore(2100, 6, "five 2's and 1 1's")),
+                  RollResult([2,3,2,3,2,3], LabeledScore(2500, 6, "two triplets")),
+                  RollResult([2,2,2,3,4,4], LabeledScore(200, 3, "three 2's")),
+                  RollResult([2,2,2,1,1,4], LabeledScore(400, 5, "three 2's and 2 1's")),
+                  RollResult([2,2,2,2,3,3], LabeledScore(1500, 6, "three doublets")),
+                  RollResult([2,2,3,3,4,4], LabeledScore(1500, 6, "three doublets")),
+                  RollResult([2,2,2,2,3,4], LabeledScore(1000, 4, "four 2's")),
+                  RollResult([2,2,2,2,1,5], LabeledScore(1150, 6, "four 2's and 1 1's and 1 5's")),
+                  RollResult([1,2,1,5,5,3], LabeledScore(300, 4, "2 1's and 2 5's")),
+                  RollResult([2,3,4,6,6,2], LabeledScore(0, 0,  "hard farkle"))
                   ];
     foreach(roll; rolls){
         setRoll(roll.dice);
@@ -277,12 +329,12 @@ unittest {
     }
     writeln("6 die rolls all good");
     auto partialRolls = [
-                         RollResult([1,1,1], LabeledScore(300, "three 1's")),
-                         RollResult([5], LabeledScore(50, "1 5's")),
-                         RollResult([5, 5, 1], LabeledScore(200, "1 1's and 2 5's")),
-                         RollResult([4, 4, 4, 1], LabeledScore(500, "three 4's and 1 1's")),
-                         RollResult([2,3,4,6], LabeledScore(0, "farkle")),
-                         RollResult([2,3,4,6,2], LabeledScore(0, "pretty bad farkle"))
+                         RollResult([1,1,1], LabeledScore(300, 3, "three 1's")),
+                         RollResult([5], LabeledScore(50, 1, "1 5's")),
+                         RollResult([5, 5, 1], LabeledScore(200, 3, "1 1's and 2 5's")),
+                         RollResult([4, 4, 4, 1], LabeledScore(500, 4, "three 4's and 1 1's")),
+                         RollResult([2,3,4,6], LabeledScore(0, 0, "farkle")),
+                         RollResult([2,3,4,6,2], LabeledScore(0, 0, "pretty bad farkle"))
                          ];
     foreach(roll; partialRolls){
         writeln("dice: ", roll.dice, " f.scoreRoll: ", f.scoreDice(roll.dice), " expected: ", roll.expected);
