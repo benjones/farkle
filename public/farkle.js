@@ -29,7 +29,6 @@ function initDie(die){
     bg.setAttribute("width", svgRect.width);
     bg.setAttribute("height", svgRect.height);
     bg.setAttribute("rx", svgRect.width*.1);
-    bg.setAttribute("fill", unheldBG);
 
     die.appendChild(bg);
 }
@@ -73,31 +72,112 @@ function updateDie(die, showing){
 
 function setHeld(die, isHeld){
     let bg = die.getElementsByTagName("rect")[0];
-    bg.setAttribute("fill", isHeld ? heldBG : unheldBG);
+    if(isHeld){
+        bg.classList.add("held");
+    }
+}
+
+function displayGameState(gameState){
+    let dice = document.getElementsByClassName("die");
+    for(let i = 0; i < gameState.dice.length; i++){
+        updateDie(dice[i], gameState.dice[i].showing);
+        setHeld(dice[i], gameState.dice[i].held);
+    }
+    
+    let tbody = document.getElementById("scoreArea");
+    tbody.innerHTML = "";
+    for(let player of gameState.players){
+        let tr = document.createElement("tr");
+        let nameField = document.createElement("td");
+        nameField.appendChild(document.createTextNode(player.name));
+        let scoreField = document.createElement("td");
+        scoreField.appendChild(document.createTextNode(player.score));
+        tr.appendChild(nameField);
+        tr.appendChild(scoreField);
+        
+        tbody.appendChild(tr);
+    }
+    
+}
+
+function diceHandler(){
+    console.log("dice handler");
+    console.log(this);
+    this.getElementsByTagName("rect")[0].classList.toggle("pendingHold");
+}
+
+function clearDiceHandlers(){
+    let dice = document.getElementsByClassName("die");
+    for(let die of dice){
+        die.removeEventListener("click", diceHandler);
+    }
+}
+
+function addDiceHandlers(){
+    let dice = document.getElementsByClassName("die");
+    for(let die of dice){
+        let rect = die.getElementsByTagName("rect")[0];
+        if(!rect.classList.contains("held")){
+            die.addEventListener("click", diceHandler);
+        }
+    }
+}
+
+function displayMoves(message){
+
+    clearDiceHandlers();
+    let movDiv = document.getElementById("moves");
+    movDiv.innerHTML = "";
+    
+    for(let move of message.legalMoves){
+        let s = document.createElement("span");
+        s.classList.add("moveButton");
+        s.appendChild(document.createTextNode(move));
+        movDiv.appendChild(s);
+        s.addEventListener("click", function(){
+            clearDiceHandlers();
+            movDiv.innerHTML = ""; //clear this after we move
+        });
+        
+        if(move == "Roll"){
+            addDiceHandlers();
+
+            s.addEventListener("click", function(){
+                //collect the newly pending dice
+                let ret = {};
+                ret.type = "Roll";
+                ret.newHolds = [];
+                
+                let dice = document.getElementsByClassName("die");
+                for(let i = 0; i < dice.length; i++){
+                    let die = dice[i];
+                    let rect = die.getElementsByTagName("rect")[0];
+                    if(rect.classList.contains("pendingHold")){
+                        ret.newHolds.push(i);
+                        rect.classList.remove("pendingHold");
+                    }
+                }
+                ws.send(JSON.stringify(ret));
+            });
+            
+        } else {
+            s.addEventListener("click", function(){
+                let ret = {};
+                ret.type = move;
+                ws.send(JSON.stringify(ret));
+            });
+        }
+    }
+    
+    
 }
 
 function handleMessage(message){
     let jo = JSON.parse(message.data);
     console.log(jo);
     if(jo.type == "gameState"){
-        let dice = document.getElementsByClassName("die");
-        for(let i = 0; i < jo.dice.length; i++){
-            updateDie(dice[i], jo.dice[i].showing);
-            setHeld(dice[i], jo.dice[i].held);
-        }
-
-        let tbody = document.getElementById("scoreArea");
-        tbody.innerHTML = "";
-        for(let player of jo.players){
-            let tr = document.createElement("tr");
-            let nameField = document.createElement("td");
-            nameField.appendChild(document.createTextNode(player.name));
-            let scoreField = document.createElement("td");
-            scoreField.appendChild(document.createTextNode(player.score));
-            tr.appendChild(nameField);
-            tr.appendChild(scoreField);
-            
-            tbody.appendChild(tr);
-        }
+        displayGameState(jo);
+    } else if(jo.type == "yourTurn"){
+        displayMoves(jo);
     }
 }

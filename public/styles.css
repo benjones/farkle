@@ -2,3 +2,24 @@
 div, table {
     border: 1px solid black;
 }
+
+.moveButton {
+    background-color: blue;
+    text-color: white;
+    margin: 0em 2em;
+    padding: 0.25em 0.5em;
+}
+
+.held {
+    fill: blue;
+}
+
+.pendingHold {
+    fill : orange;
+}
+
+rect {
+    fill : red;
+}
+
+
