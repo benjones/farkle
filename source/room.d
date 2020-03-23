@@ -58,6 +58,8 @@ class Room {
             move = Stay();
         } else if(ts == "NewRoll"){
             move = NewRoll();
+        } else if(ts == "Steal"){
+            move = Steal();
         } else {
             logInfo("unknown command type");
             assert(false);

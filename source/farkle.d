@@ -53,7 +53,11 @@ struct Stay {}
 ///roll all 6 dice
 struct NewRoll{}
 
-alias Move = SumType!(Roll, Stay, NewRoll);
+///Let it ride!
+struct Steal{}
+
+
+alias Move = SumType!(Roll, Stay, NewRoll, Steal);
 
 struct LabeledScore {
     int score;
@@ -89,6 +93,7 @@ struct Farkle {
         ret["whoseTurn"] = whoseTurn;
         ret["turnScore"] = turnScore;
         ret["lastScore"] = lastScore.serializeToJson;
+        ret["scoringMoves"] = scoringDice.serializeToJson;
         return ret;
     }
     static Json fromJson(Json src){
@@ -162,10 +167,15 @@ struct Farkle {
         //TODO, be more accurate here
         if(dice[].count!(a => a.held) < 5){
             ret["legalMoves"] ~= "Roll";
-        } if(legalStay){
+        }
+        if(legalStay){
             ret["legalMoves"] ~= "Stay";
-        } if(legalNewRoll){
+        }
+        if(legalNewRoll){
             ret["legalMoves"] ~= "NewRoll";
+        }
+        if(legalSteal){
+            ret["legalMoves"] ~= "Steal";
         }
         return ret;
     }
@@ -174,7 +184,8 @@ struct Farkle {
         bool ret = move.match!(
                     (Roll r) => legalRoll(r),
                     (Stay s) => legalStay(),
-                    (NewRoll nr) => legalNewRoll()
+                    (NewRoll nr) => legalNewRoll(),
+                    (Steal s) => legalSteal()
                            );
         logInfo("was the move legal? %s", ret);
         return ret;
@@ -201,22 +212,46 @@ struct Farkle {
         return showingScore.diceUsed == showingDice.length;
         
     }
+
+    bool legalSteal(){
+        import std.algorithm : count;
+        
+        return startOfTurn &&
+            lastScore.score > 0 &&
+            (dice[].count!(a => a.held) + lastScore.diceUsed < 6);
+    }
     
     void takeAction(Move move){
         move.match!(
                     (Roll r) => roll(r),
                     (Stay s) => stay(),
-                    (NewRoll nr) => newRoll()
+                    (NewRoll nr) => newRoll(),
+                    (Steal s) => steal()
                     );
     }
     
-    void nextPlayer(){
+    void nextPlayer(bool farkled){
         whoseTurn = (whoseTurn +1) % players.length;
         startOfTurn = true;
+        if(farkled){
+            scoringDice = [];
+            turnScore = 0;
+        }
+    }
+
+    int[] rollFreeDice(){
+        import std.random : uniform;
+        foreach(ref die; dice){
+            if(!die.held){
+                die.showing = uniform!"[]"(1,6);
+            }
+        }
+        
+        return dice[].filter!(a => !a.held).map!(a => a.showing).array;
+
     }
     
     void roll(Roll roll){
-        import std.random : uniform;
         logInfo("rolling with holds: %s", roll);
         startOfTurn = false;
         const heldScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
@@ -228,16 +263,11 @@ struct Farkle {
         turnScore += heldScore.score;
         scoringDice ~= heldScore;
 
-        foreach(ref die; dice){
-            if(!die.held){
-                die.showing = uniform!"[]"(1,6);
-            }
-        }
+        int[] rolledDice = rollFreeDice;
         
-        int[] rolledDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
         lastScore = scoreDice(rolledDice);
         if(lastScore.score == 0){
-            nextPlayer();
+            nextPlayer(true);
         }
     }
 
@@ -245,7 +275,7 @@ struct Farkle {
         logInfo("staying!");
         assert(!startOfTurn);
         players[whoseTurn].score += turnScore;
-        nextPlayer();
+        nextPlayer(false);
     }
 
     void newRoll(){
@@ -258,9 +288,22 @@ struct Farkle {
         }
         lastScore = scoreRoll();
         if(lastScore.score == 0){
-            nextPlayer();
+            nextPlayer(true);
         }
 
+    }
+
+    void steal(){
+        assert(startOfTurn);
+
+        startOfTurn = false;
+        auto rolledDice = rollFreeDice;
+
+        lastScore = scoreDice(rolledDice);
+        if(lastScore.score == 0){
+            nextPlayer(true);
+        }
+        
     }
     
     LabeledScore scoreRoll(){

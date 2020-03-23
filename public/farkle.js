@@ -74,6 +74,8 @@ function setHeld(die, isHeld){
     let bg = die.getElementsByTagName("rect")[0];
     if(isHeld){
         bg.classList.add("held");
+    } else {
+        bg.classList.remove("held");
     }
 }
 
@@ -96,6 +98,35 @@ function displayGameState(gameState){
         tr.appendChild(scoreField);
         
         tbody.appendChild(tr);
+    }
+
+    let scoreBody = document.getElementById("scoresThisTurn");
+    scoreBody.innerHTML = "";
+    for(let scoringDie of gameState.scoringMoves){
+        let tr = document.createElement("tr");
+        //score diceUsed description
+        let scoreField = document.createElement("td");
+        scoreField.appendChild(document.createTextNode(scoringDie.score));
+        let descriptionField = document.createElement("td");
+        descriptionField.appendChild(document.createTextNode(scoringDie.description));
+        let diceUsedField = document.createElement("td");
+        diceUsedField.appendChild(document.createTextNode(scoringDie.diceUsed));
+
+        tr.appendChild(scoreField);
+        tr.appendChild(descriptionField);
+        tr.appendChild(diceUsedField);
+        
+        scoreBody.appendChild(tr);
+        
+    }
+
+    let farkleAlert = document.getElementById("farkleAlert");
+    farkleAlert.innerHTML = "";
+    if(gameState.lastScore.score == 0){
+        let player = gameState.players[(gameState.whoseTurn - 1 + gameState.players.length)
+                                       % gameState.players.length];
+        farkleAlert.appendChild(document.createTextNode( player.name + " " +
+                                                         gameState.lastScore.description + "'d"));
     }
     
 }
