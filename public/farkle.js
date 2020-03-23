@@ -85,5 +85,19 @@ function handleMessage(message){
             updateDie(dice[i], jo.dice[i].showing);
             setHeld(dice[i], jo.dice[i].held);
         }
+
+        let tbody = document.getElementById("scoreArea");
+        tbody.innerHTML = "";
+        for(let player of jo.players){
+            let tr = document.createElement("tr");
+            let nameField = document.createElement("td");
+            nameField.appendChild(document.createTextNode(player.name));
+            let scoreField = document.createElement("td");
+            scoreField.appendChild(document.createTextNode(player.score));
+            tr.appendChild(nameField);
+            tr.appendChild(scoreField);
+            
+            tbody.appendChild(tr);
+        }
     }
 }

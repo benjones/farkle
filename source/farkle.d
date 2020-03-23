@@ -118,10 +118,15 @@ struct Farkle {
         players.replaceInPlace(index, index + 1, cast(Player[])[]);
         logInfo("players: %s", players.map!(a => a.toJson));
         logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
-        assert(whoseTurn < players.length);
+        if(players.empty){
+            initializeGame();
+        } else {
+            assert(whoseTurn < players.length);
+        }
     }
 
     void initializeGame(){
+        whoseTurn = 0;
         startOfTurn = true;
         foreach(ref die; dice){
             die.held = false;
