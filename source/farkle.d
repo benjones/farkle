@@ -1,7 +1,6 @@
 ///Data structures for the game and functions that operate on it
 module farkle;
 
-import std.stdio : writeln;
 import std.conv : to;
 import std.algorithm : map, filter, find;
 import std.range;
@@ -36,6 +35,10 @@ struct Player {
 
     static Player fromJson(Json src){
         assert(false, "not supported");
+    }
+
+    void sendMessage(Json message){
+        ws.send(message.toString);
     }
 }
 
@@ -74,15 +77,18 @@ struct Farkle {
         int turnScore;
         LabeledScore[] scoringDice;
         bool startOfTurn;
+        LabeledScore lastScore;
     }
 
     //for serialization
     Json toJson(){
         auto ret = Json.emptyObject;
+        ret["type"] = "gameState";
         ret["dice"] = dice.serializeToJson;
         ret["players"] = players.serializeToJson;
         ret["whoseTurn"] = whoseTurn;
         ret["turnScore"] = turnScore;
+        ret["lastScore"] = lastScore.serializeToJson;
         return ret;
     }
     static Json fromJson(Json src){
@@ -95,12 +101,14 @@ struct Farkle {
         import std.range : empty;
         if(players.empty){
             players = [p];
-            newTurn();
+            initializeGame();
         } else {
             players.insertInPlace(whoseTurn + 1, p);
         }
-        writeln("players: ", players.map!(a => a.toJson));
-        writeln("it's " ~ to!string(whoseTurn) ~ "'s turn");
+        logInfo("players: ", players.map!(a => a.toJson));
+        logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
+
+        p.sendMessage(this.toJson);
     }
     
     void removePlayer(WebSocket socket){
@@ -108,11 +116,28 @@ struct Farkle {
         auto found = players.find!(a => a.ws == socket);
         auto index = players.length - found.length;
         players.replaceInPlace(index, index + 1, cast(Player[])[]);
-        writeln("players: ", players.map!(a => a.toJson));
-        writeln("it's " ~ to!string(whoseTurn) ~ "'s turn");
+        logInfo("players: ", players.map!(a => a.toJson));
+        logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
         assert(whoseTurn < players.length);
     }
 
+    void initializeGame(){
+        startOfTurn = true;
+        foreach(ref die; dice){
+            die.held = false;
+        }
+    }
+    
+    void messageAllPlayers(Json message){
+        foreach(p; players){
+            p.sendMessage(message);
+        }
+    }
+
+    void messageActivePlayer(Json message){
+        players[whoseTurn].sendMessage(message);
+    }
+    
     Player getPlayer(WebSocket socket){
         return players.find!(a => a.ws == socket).front;
     }
@@ -121,7 +146,24 @@ struct Farkle {
         return players[whoseTurn].ws == socket;
     }
 
-    bool legalMove(Move move){
+    Json legalMoves(){
+        import std.algorithm : count;
+        
+        auto ret = Json.emptyObject;
+        ret["type"] = "yourTurn";
+        ret["legalMoves"] = Json.emptyArray;
+        //TODO, be more accurate here
+        if(dice[].count!(a => a.held) < 4){
+            ret["legalMoves"] ~= "Roll";
+        } if(legalStay){
+            ret["legalMoves"] ~= "Stay";
+        } if(legalNewRoll){
+            ret["legalMoves"] ~= "NewRoll";
+        }
+        return ret;
+    }
+    
+    bool isLegalMove(Move move){
         return move.match!(
                     (Roll r) => legalRoll(r),
                     (Stay s) => legalStay(),
@@ -138,8 +180,9 @@ struct Farkle {
 
         int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
         const showingScore = scoreDice(showingDice);
-        return players[whoseTurn].score >= FirstTurnMinScore ||
-            (turnScore + showingScore.score) >= FirstTurnMinScore;
+        return !startOfTurn &&
+            (players[whoseTurn].score >= FirstTurnMinScore ||
+             (turnScore + showingScore.score) >= FirstTurnMinScore);
     }
 
     bool legalNewRoll(){
@@ -158,46 +201,51 @@ struct Farkle {
                     );
     }
     
+    void nextPlayer(){
+        whoseTurn = (whoseTurn +1) % players.length;
+        startOfTurn = true;
+    }
     
     void roll(Roll roll){
         import std.random : uniform;
-
+        startOfTurn = false;
         const heldScore = scoreDice(roll.newHolds);
         
         foreach(hold; roll.newHolds){
             dice[hold].held = true;
         }
-
+        logInfo("heldScore from roll: ", heldScore);
         turnScore += heldScore.score;
         scoringDice ~= heldScore;
-        
+
         foreach(ref die; dice){
             if(!die.held){
                 die.showing = uniform!"[]"(1,6);
             }
         }
+        
+        int[] rolledDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
+        lastScore = scoreDice(rolledDice);
+        if(lastScore.score == 0){
+            nextPlayer();
+        }
     }
 
     void stay(){
-        if(players[whoseTurn].score < FirstTurnMinScore && turnScore < FirstTurnMinScore){
-            logInfo("can't stay... Must have at least " ~ to!string(FirstTurnMinScore)
-                    ~ " to get on the board");
-            return;
-        }
-
+        assert(!startOfTurn);
         players[whoseTurn].score += turnScore;
-        whoseTurn = (whoseTurn +1) % players.length;
+        nextPlayer();
     }
 
     void newRoll(){
+        import std.random : uniform;
         
+        startOfTurn = false;
+        foreach(ref die; dice){
+            die.held = false;
+            die.showing = die.showing = uniform!"[]"(1,6);
+        }
     }
-    
-    //start who's turn clean by rolling all 6 dice
-    void newTurn(){
-        //TBD
-    }
-
     
     LabeledScore scoreRoll(){
         import std.array;
@@ -213,6 +261,10 @@ struct Farkle {
         import std.conv : to;
         import std.stdio;
 
+        if(toScore.empty){
+            return LabeledScore(0, 0, "no dice to score");
+        }
+                
         sort(toScore);
         auto groups = toScore.group.array.sort!((a, b) => a[1] > b[1]);
 
@@ -234,7 +286,7 @@ struct Farkle {
             return ret;
         }
         
-        writeln("groups: ", groups);
+        logInfo("groups: ", groups);
         if(groups.length == 6){
             //straight
             return LabeledScore(3000, 6, "straight");

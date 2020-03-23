@@ -23,16 +23,6 @@ class WebsocketService {
         room.join("name", socket);
         logInfo("joined");
 
-        auto bg = runTask({
-                
-                while(socket.connected){
-                    auto jo = room.listenForBroadcast();
-                    socket.send(jo.toString);
-                }
-                
-            });
-
-        
 		while (socket.waitForData) {
             auto message = socket.receiveText();
             auto jo = parseJson(message);

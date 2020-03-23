@@ -14,15 +14,13 @@ struct LogEntry {
 class Room {
     
     Farkle farkle;
-    LocalManualEvent roomEvent;
     LogEntry[] log;
 
-    this(){
-        roomEvent = createManualEvent;
-    }
-    
     void join(string name, WebSocket socket){
         farkle.addPlayer(Player(name, 0, socket));
+        if(farkle.isMyTurn(socket)){
+            farkle.messageActivePlayer(farkle.legalMoves);
+        }
     }
 
     void leave(WebSocket socket){
@@ -65,13 +63,15 @@ class Room {
             assert(false);
         }
         logInfo("turn: ", command);
-        farkle.takeAction(move);
+        if(farkle.isLegalMove(move)){
+            farkle.takeAction(move);
+        }
+
+        farkle.messageAllPlayers(farkle.toJson);
+        farkle.messageActivePlayer(farkle.legalMoves);
+        
     }
 
-    Json listenForBroadcast(){
-        roomEvent.wait();
-        return farkle.toJson;
-    }
 }
 
 Room getRoom(){
