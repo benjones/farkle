@@ -25,8 +25,11 @@ class WebsocketService {
 
 		while (socket.waitForData) {
             auto message = socket.receiveText();
+            logInfo("message: %s", message);
             auto jo = parseJson(message);
+            logInfo("JSON message: %s", jo);
             if(room.isMyTurn(socket)){
+                logInfo("taking my turn");
                 room.takeTurn(socket,jo);
             }
 		}

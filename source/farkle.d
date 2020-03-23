@@ -105,9 +105,9 @@ struct Farkle {
         } else {
             players.insertInPlace(whoseTurn + 1, p);
         }
-        logInfo("players: ", players.map!(a => a.toJson));
+        logInfo("players: %s", players.map!(a => a.toJson));
         logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
-
+        logInfo("sending them: %s ", this.toJson);
         p.sendMessage(this.toJson);
     }
     
@@ -116,7 +116,7 @@ struct Farkle {
         auto found = players.find!(a => a.ws == socket);
         auto index = players.length - found.length;
         players.replaceInPlace(index, index + 1, cast(Player[])[]);
-        logInfo("players: ", players.map!(a => a.toJson));
+        logInfo("players: %s", players.map!(a => a.toJson));
         logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
         assert(whoseTurn < players.length);
     }
@@ -129,12 +129,14 @@ struct Farkle {
     }
     
     void messageAllPlayers(Json message){
+        logInfo("messaging everyone: %s", message.toString);
         foreach(p; players){
             p.sendMessage(message);
         }
     }
 
     void messageActivePlayer(Json message){
+        logInfo("messaging active player: %s", message.toString);
         players[whoseTurn].sendMessage(message);
     }
     
@@ -153,7 +155,7 @@ struct Farkle {
         ret["type"] = "yourTurn";
         ret["legalMoves"] = Json.emptyArray;
         //TODO, be more accurate here
-        if(dice[].count!(a => a.held) < 4){
+        if(dice[].count!(a => a.held) < 5){
             ret["legalMoves"] ~= "Roll";
         } if(legalStay){
             ret["legalMoves"] ~= "Stay";
@@ -164,15 +166,17 @@ struct Farkle {
     }
     
     bool isLegalMove(Move move){
-        return move.match!(
+        bool ret = move.match!(
                     (Roll r) => legalRoll(r),
                     (Stay s) => legalStay(),
                     (NewRoll nr) => legalNewRoll()
                            );
+        logInfo("was the move legal? %s", ret);
+        return ret;
     }
 
     bool legalRoll(Roll roll){
-        auto heldScore = scoreDice(roll.newHolds);
+        auto heldScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
         return heldScore.score > 0;
     }
 
@@ -208,13 +212,14 @@ struct Farkle {
     
     void roll(Roll roll){
         import std.random : uniform;
+        logInfo("rolling with holds: %s", roll);
         startOfTurn = false;
-        const heldScore = scoreDice(roll.newHolds);
+        const heldScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
         
         foreach(hold; roll.newHolds){
             dice[hold].held = true;
         }
-        logInfo("heldScore from roll: ", heldScore);
+        logInfo("heldScore from roll: %s", heldScore);
         turnScore += heldScore.score;
         scoringDice ~= heldScore;
 
@@ -232,6 +237,7 @@ struct Farkle {
     }
 
     void stay(){
+        logInfo("staying!");
         assert(!startOfTurn);
         players[whoseTurn].score += turnScore;
         nextPlayer();
@@ -239,12 +245,17 @@ struct Farkle {
 
     void newRoll(){
         import std.random : uniform;
-        
+        logInfo("newRoll!");
         startOfTurn = false;
         foreach(ref die; dice){
             die.held = false;
             die.showing = die.showing = uniform!"[]"(1,6);
         }
+        lastScore = scoreRoll();
+        if(lastScore.score == 0){
+            nextPlayer();
+        }
+
     }
     
     LabeledScore scoreRoll(){
@@ -286,7 +297,7 @@ struct Farkle {
             return ret;
         }
         
-        logInfo("groups: ", groups);
+        logInfo("groups: %s", groups);
         if(groups.length == 6){
             //straight
             return LabeledScore(3000, 6, "straight");

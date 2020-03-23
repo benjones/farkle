@@ -3,24 +3,20 @@ const svgNS = "http://www.w3.org/2000/svg";
 
 let ws; //global for debuggin purposes
 
-const unselectedBG = "red";
+const unheldBG = "red";
+const heldBG = "blue";
 const pipColor = "black";
 
 window.onload = function(){
 
     ws = new WebSocket("ws://" + location.host + "/ws");
-    ws.onmessage = function(m){ console.log(m); };
-    
+    ws.onmessage = handleMessage;
 
     let dice = document.getElementsByClassName("die");
-
     for(let i = 0; i < dice.length; i++){
         initDie(dice[i]);
         updateDie(dice[i], i +1);
     }
-    console.log(dice);
-    
-    
 }
 
 
@@ -33,7 +29,7 @@ function initDie(die){
     bg.setAttribute("width", svgRect.width);
     bg.setAttribute("height", svgRect.height);
     bg.setAttribute("rx", svgRect.width*.1);
-    bg.setAttribute("fill", unselectedBG);
+    bg.setAttribute("fill", unheldBG);
 
     die.appendChild(bg);
 }
@@ -52,7 +48,7 @@ function updateDie(die, showing){
 
     //delete old pips
 
-    let oldPips = die.getElementsByClassName("pip");
+    let oldPips = die.querySelectorAll(".pip");
     for(let pip of oldPips){
         pip.remove();
     }
@@ -69,10 +65,25 @@ function updateDie(die, showing){
         pip.setAttribute("cy", coord[1]*sh);
         pip.setAttribute("r", 0.08*sw);
         pip.setAttribute("fill", pipColor);
+        pip.setAttribute("class", "pip");
         
         die.appendChild(pip);
-        
     }
-    
-    
+}
+
+function setHeld(die, isHeld){
+    let bg = die.getElementsByTagName("rect")[0];
+    bg.setAttribute("fill", isHeld ? heldBG : unheldBG);
+}
+
+function handleMessage(message){
+    let jo = JSON.parse(message.data);
+    console.log(jo);
+    if(jo.type == "gameState"){
+        let dice = document.getElementsByClassName("die");
+        for(let i = 0; i < jo.dice.length; i++){
+            updateDie(dice[i], jo.dice[i].showing);
+            setHeld(dice[i], jo.dice[i].held);
+        }
+    }
 }

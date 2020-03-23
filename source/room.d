@@ -36,7 +36,7 @@ class Room {
         import std.array;
         
         auto player = farkle.getPlayer(ws);
-        logInfo("player ", player, " taking turn with command: ", command);
+        logInfo("player %s taking turn with command: %s", player, command);
         Move move;
         auto type = command["type"];
         if(type.type != Json.Type.string){
@@ -62,7 +62,7 @@ class Room {
             logInfo("unknown command type");
             assert(false);
         }
-        logInfo("turn: ", command);
+        logInfo("turn: %s", command);
         if(farkle.isLegalMove(move)){
             farkle.takeAction(move);
         }
