@@ -55,7 +55,13 @@ class Room {
             auto newHolds = newHoldsJson.get!(Json[]).map!(a => a.get!int).array;
             move = Roll(newHolds);
         } else if(ts == "Stay"){
-            move = Stay();
+            auto toHoldJson = command["toHold"];
+            if(toHoldJson.type != Json.Type.array){
+                logInfo("no toHolds");
+                assert(false);
+            }
+            auto toHold = toHoldJson.get!(Json[]).map!(a => a.get!int).array;
+            move = Stay(toHold);
         } else if(ts == "NewRoll"){
             move = NewRoll();
         } else if(ts == "Steal"){

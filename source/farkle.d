@@ -47,8 +47,10 @@ struct Roll {
     int[] newHolds;
 }
 
-///keep the score from this turn so far
-struct Stay {}
+///keep the score from this turn + the held dice
+struct Stay {
+    int[] toHold;
+}
 
 ///roll all 6 dice
 struct NewRoll{}
@@ -81,7 +83,8 @@ struct Farkle {
         int turnScore;
         LabeledScore[] scoringDice;
         bool startOfTurn;
-        LabeledScore lastScore;
+        LabeledScore lastScore; //last score for held dice.  Todo use scoringDice.back
+        LabeledScore showingScore; //score on the dice that are showing
     }
 
     //for serialization
@@ -165,7 +168,7 @@ struct Farkle {
         ret["type"] = "yourTurn";
         ret["legalMoves"] = Json.emptyArray;
         //TODO, be more accurate here
-        if(dice[].count!(a => a.held) < 5){
+        if(!startOfTurn && dice[].count!(a => a.held) < 5){
             ret["legalMoves"] ~= "Roll";
         }
         if(legalStay){
@@ -218,13 +221,13 @@ struct Farkle {
         
         return startOfTurn &&
             lastScore.score > 0 &&
-            (dice[].count!(a => a.held) + lastScore.diceUsed < 6);
+            (dice[].count!(a => a.held) < 6);
     }
     
     void takeAction(Move move){
         move.match!(
                     (Roll r) => roll(r),
-                    (Stay s) => stay(),
+                    (Stay s) => stay(s),
                     (NewRoll nr) => newRoll(),
                     (Steal s) => steal()
                     );
@@ -250,30 +253,46 @@ struct Farkle {
         return dice[].filter!(a => !a.held).map!(a => a.showing).array;
 
     }
+
+    void holdDice(int[] toHold){
+        foreach(hold; toHold){
+            dice[hold].held = true;
+        }
+    }
     
     void roll(Roll roll){
         logInfo("rolling with holds: %s", roll);
         startOfTurn = false;
-        const heldScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
-        
-        foreach(hold; roll.newHolds){
-            dice[hold].held = true;
-        }
-        logInfo("heldScore from roll: %s", heldScore);
-        turnScore += heldScore.score;
-        scoringDice ~= heldScore;
+
+        lastScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
+
+        holdDice(roll.newHolds);
+
+        logInfo("heldScore from roll: %s", lastScore);
+        turnScore += lastScore.score;
+        scoringDice ~= lastScore;
 
         int[] rolledDice = rollFreeDice;
         
-        lastScore = scoreDice(rolledDice);
-        if(lastScore.score == 0){
+        showingScore = scoreDice(rolledDice);
+        
+        if(showingScore.score == 0){
+            lastScore = showingScore;
             nextPlayer(true);
         }
     }
 
-    void stay(){
+    void stay(Stay stay){
         logInfo("staying!");
         assert(!startOfTurn);
+
+        lastScore = scoreDice(stay.toHold.map!(a => dice[a].showing).array);
+
+        holdDice(stay.toHold);
+        
+        turnScore += lastScore.score;
+        scoringDice ~= lastScore;
+        
         players[whoseTurn].score += turnScore;
         nextPlayer(false);
     }
@@ -281,13 +300,22 @@ struct Farkle {
     void newRoll(){
         import std.random : uniform;
         logInfo("newRoll!");
+
+        if(!startOfTurn){
+            lastScore = showingScore;
+            turnScore += lastScore.score;
+            scoringDice ~= lastScore;
+        }
+
         startOfTurn = false;
+        
         foreach(ref die; dice){
             die.held = false;
             die.showing = die.showing = uniform!"[]"(1,6);
         }
-        lastScore = scoreRoll();
-        if(lastScore.score == 0){
+        showingScore = scoreRoll();
+        if(showingScore.score == 0){
+            lastScore = showingScore;
             nextPlayer(true);
         }
 
@@ -295,12 +323,13 @@ struct Farkle {
 
     void steal(){
         assert(startOfTurn);
-
+        logInfo("stealing!");
         startOfTurn = false;
         auto rolledDice = rollFreeDice;
 
-        lastScore = scoreDice(rolledDice);
-        if(lastScore.score == 0){
+        showingScore = scoreDice(rolledDice);
+        if(showingScore.score == 0){
+            lastScore = showingScore;
             nextPlayer(true);
         }
         

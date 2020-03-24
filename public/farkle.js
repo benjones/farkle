@@ -170,23 +170,28 @@ function displayMoves(message){
             movDiv.innerHTML = ""; //clear this after we move
         });
         
-        if(move == "Roll"){
+        if(move == "Roll" || move =="Stay"){
             addDiceHandlers();
 
             s.addEventListener("click", function(){
                 //collect the newly pending dice
                 let ret = {};
-                ret.type = "Roll";
-                ret.newHolds = [];
+                ret.type = move;
+                let holds = [];
                 
                 let dice = document.getElementsByClassName("die");
                 for(let i = 0; i < dice.length; i++){
                     let die = dice[i];
                     let rect = die.getElementsByTagName("rect")[0];
                     if(rect.classList.contains("pendingHold")){
-                        ret.newHolds.push(i);
+                        holds.push(i);
                         rect.classList.remove("pendingHold");
                     }
+                }
+                if(move == "Roll"){
+                    ret.newHolds = holds;
+                } else {
+                    ret.toHold = holds;
                 }
                 ws.send(JSON.stringify(ret));
             });
