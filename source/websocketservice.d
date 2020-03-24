@@ -10,6 +10,9 @@ import vibe.data.json;
 
 
 class WebsocketService {
+
+    private Room[string] roomIndex;
+    
     @path("/") void getHome()
 	{
         logInfo("redirecting to index.html");
@@ -18,7 +21,10 @@ class WebsocketService {
 
 	@path("/ws") void getWebsocket(scope WebSocket socket){
         logInfo("ws connected");
-        auto room = getRoom();
+        auto room = createRoom("room");
+        if(room is null)
+            room = getRoom("room");
+        
         logInfo("joining room");
         room.join("name", socket);
         logInfo("joined");
@@ -37,4 +43,27 @@ class WebsocketService {
         room.leave(socket);
 		logInfo("Client disconnected.");
 	}
+
+
+private:
+    Room createRoom(string name){
+        if(name in roomIndex){
+            return null;
+        }
+        logInfo("making new room: %s", name);
+        Room r = new Room();
+        roomIndex[name] = r;
+        return r;
+    }
+    
+    Room getRoom(string name){
+
+        if(name !in roomIndex){
+            return null;
+        }
+        logInfo("getting room: ", name);
+        return roomIndex[name];
+
+    }
+    
 }

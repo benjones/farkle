@@ -97,6 +97,7 @@ struct Farkle {
         ret["turnScore"] = turnScore;
         ret["lastScore"] = lastScore.serializeToJson;
         ret["scoringMoves"] = scoringDice.serializeToJson;
+        ret["showingScore"] = showingScore.serializeToJson;
         return ret;
     }
     static Json fromJson(Json src){
@@ -287,8 +288,9 @@ struct Farkle {
         assert(!startOfTurn);
 
         lastScore = scoreDice(stay.toHold.map!(a => dice[a].showing).array);
-
         holdDice(stay.toHold);
+
+        showingScore = scoreRoll;
         
         turnScore += lastScore.score;
         scoringDice ~= lastScore;
@@ -305,6 +307,9 @@ struct Farkle {
             lastScore = showingScore;
             turnScore += lastScore.score;
             scoringDice ~= lastScore;
+        } else {
+            turnScore = 0;
+            scoringDice = [];
         }
 
         startOfTurn = false;

@@ -72,6 +72,7 @@ function updateDie(die, showing){
 
 function setHeld(die, isHeld){
     let bg = die.getElementsByTagName("rect")[0];
+    bg.classList.remove("pendingHold");
     if(isHeld){
         bg.classList.add("held");
     } else {
@@ -127,6 +128,15 @@ function displayGameState(gameState){
                                        % gameState.players.length];
         farkleAlert.appendChild(document.createTextNode( player.name + " " +
                                                          gameState.lastScore.description + "'d"));
+    }
+
+    let showingScore = document.getElementById("showingScore");
+    showingScore.innerHTML = "";
+    if(gameState.showingScore.score > 0){
+        showingScore.appendChild(document.createTextNode("Score showing: " +
+                                                         gameState.showingScore.description +
+                                                         " worth " +
+                                                         gameState.showingScore.score));
     }
     
 }
@@ -196,7 +206,7 @@ function displayMoves(message){
                 ws.send(JSON.stringify(ret));
             });
             
-        } else {
+        } else { //Steal or NewRoll
             s.addEventListener("click", function(){
                 let ret = {};
                 ret.type = move;

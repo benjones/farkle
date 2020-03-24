@@ -82,12 +82,3 @@ class Room {
 
 }
 
-Room getRoom(){
-    static Room room;
-    if(!room){
-        logInfo("making new room");
-        room = new Room();
-    }
-    logInfo("room: ", room);
-    return room;
-}
