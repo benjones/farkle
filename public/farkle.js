@@ -7,16 +7,44 @@ const unheldBG = "red";
 const heldBG = "blue";
 const pipColor = "black";
 
+let roomName;
+let userName;
+
 window.onload = function(){
+
+
+    const urlParams = new URLSearchParams(window.location.search);
+    userName = urlParams.get("name");
+    roomName = urlParams.get("roomName");
+    console.log(userName);
+    console.log(roomName);
+    if(!userName){
+        console.log("username is falsy, redirecting");
+        console.log(location.host + "/");
+        window.location = "/";
+        return;
+    }
 
     ws = new WebSocket("ws://" + location.host + "/ws");
     ws.onmessage = handleMessage;
 
+    
+    let welcome = {name : userName};
+    if(roomName){
+        welcome.roomName = roomName;
+    }
+
+    ws.onopen = function(){
+        ws.send(JSON.stringify(welcome));
+    }
+    
     let dice = document.getElementsByClassName("die");
     for(let i = 0; i < dice.length; i++){
         initDie(dice[i]);
         updateDie(dice[i], i +1);
     }
+
+    
 }
 
 
@@ -123,7 +151,7 @@ function displayGameState(gameState){
 
     let farkleAlert = document.getElementById("farkleAlert");
     farkleAlert.innerHTML = "";
-    if(gameState.lastScore.score == 0){
+    if(gameState.showingScore.score == 0){
         let player = gameState.players[(gameState.whoseTurn - 1 + gameState.players.length)
                                        % gameState.players.length];
         farkleAlert.appendChild(document.createTextNode( player.name + " " +
@@ -221,7 +249,10 @@ function displayMoves(message){
 function handleMessage(message){
     let jo = JSON.parse(message.data);
     console.log(jo);
-    if(jo.type == "gameState"){
+    if(jo.type == "welcomeResponse"){
+        document.getElementById("roomName").innerHTML =
+            userName + " playing in room " + jo.roomName;
+    } else if(jo.type == "gameState"){
         displayGameState(jo);
     } else if(jo.type == "yourTurn"){
         displayMoves(jo);

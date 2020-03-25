@@ -5,11 +5,13 @@ html
         link(rel= 'stylesheet', type='text/css', href='styles.css')
         meta(charset = 'utf-8')
     body
-
+        h1 Farkle!
+        h2#roomName
+        
         #farkleAlert
 
         h2 Players
-
+        
         table
             thead
                 tr

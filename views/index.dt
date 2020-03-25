@@ -4,16 +4,17 @@ html
         title Farkle
     body
         h1 Farkle
-        p Please enter the name of a chat room to join a chat:
 
+        h2 Current games
         ul
             - foreach( room; roomList)
                 li= room
-        form(action="/room", method="GET")
-            p
-                label(for="id") Chat room:
-                input#id(type="text", name="id", autofocus=true)
+        form(action="/farkle", method="GET")
             p
                 label(for="name") Your name:
-                input#name(type="text", name="name")
-            button(type="submit") Enter
+                input#name(type="text", name="name", autofocus=true)
+            p
+                label(for="roomName") Chat room:
+                input#id(type="text", name="roomName")
+            button(type="submit") Join Room
+            button(type="submit") Create New Room

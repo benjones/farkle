@@ -16,6 +16,10 @@ class Room {
     Farkle farkle;
     LogEntry[] log;
 
+    ulong numPlayers(){
+        return farkle.numPlayers;
+    }
+    
     void join(string name, WebSocket socket){
         farkle.addPlayer(Player(name, 0, socket));
         if(farkle.isMyTurn(socket)){

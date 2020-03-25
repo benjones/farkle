@@ -104,6 +104,10 @@ struct Farkle {
         assert(false, "not supported");
     }
     
+
+    ulong numPlayers(){
+        return players.length;
+    }
     
     void addPlayer(Player p){
         import std.array : insertInPlace;
