@@ -1,0 +1,39 @@
+doctype html
+html
+    head
+        title Farkle
+        link(rel= 'stylesheet', type='text/css', href='styles.css')
+        meta(charset = 'utf-8')
+    body
+
+        #farkleAlert
+
+        h2 Players
+
+        table
+            thead
+                tr
+                    th Name
+                    th Score
+            tbody#scoreArea
+
+
+        #diceContainer
+            - foreach(i; 0 ..6)
+                svg.die(width = '80', height = '80')
+
+        #showingScore
+
+        h2 Scoring Plays this turn
+
+        table
+            thead
+                tr
+                    th Score
+                    th Description
+                    th Dice used
+            tbody#scoresThisTurn
+
+        #moves
+
+        script( type = 'text/javascript', src='farkle.js')
