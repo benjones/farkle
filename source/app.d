@@ -1,6 +1,7 @@
 import vibe.vibe;
 
 import websocketservice;
+import std.process : environment;
 
 void main()
 {
