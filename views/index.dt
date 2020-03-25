@@ -1,0 +1,19 @@
+doctype html
+html
+    head
+        title Farkle
+    body
+        h1 Farkle
+        p Please enter the name of a chat room to join a chat:
+
+        ul
+            - foreach( room; roomList)
+                li= room
+        form(action="/room", method="GET")
+            p
+                label(for="id") Chat room:
+                input#id(type="text", name="id", autofocus=true)
+            p
+                label(for="name") Your name:
+                input#name(type="text", name="name")
+            button(type="submit") Enter

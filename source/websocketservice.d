@@ -3,6 +3,7 @@ module websocketservice;
 import room;
 import vibe.web.common : path;
 import vibe.http.websockets : WebSocket;
+import vibe.http.server : render, HTTPServerRequest, HTTPServerResponse;
 import vibe.web.web : redirect;
 import vibe.core.log;
 import vibe.core.core : runTask;
@@ -13,10 +14,12 @@ class WebsocketService {
 
     private Room[string] roomIndex;
     
-    @path("/") void getHome()
+    @path("/") void index(HTTPServerRequest req, HTTPServerResponse res)
 	{
-        logInfo("redirecting to index.html");
-		redirect("/index.html");
+        //        logInfo("redirecting to index.html");
+        const roomList = getRoomList;
+        res.render!("index.dt", roomList);
+        //		redirect("/index.html");
     }
 
 	@path("/ws") void getWebsocket(scope WebSocket socket){
@@ -45,6 +48,7 @@ class WebsocketService {
 	}
 
 
+
 private:
     Room createRoom(string name){
         if(name in roomIndex){
@@ -65,5 +69,10 @@ private:
         return roomIndex[name];
 
     }
+
+    string[] getRoomList(){
+        return roomIndex.keys;
+    }
+
     
 }
