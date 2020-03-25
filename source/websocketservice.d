@@ -65,6 +65,16 @@ class WebsocketService {
             logInfo("message: %s", message);
             auto jo = parseJson(message);
             logInfo("JSON message: %s", jo);
+
+            if(jo["type"].get!string == "ping"){
+                logInfo("got ping");
+                auto pong = Json.emptyObject;
+                pong["type"] = "pong";
+                socket.send(pong.toString);
+                logInfo("sent pong");
+                continue;
+            }
+            
             if(room.isMyTurn(socket)){
                 logInfo("taking my turn");
                 room.takeTurn(socket,jo);

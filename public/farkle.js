@@ -36,6 +36,11 @@ window.onload = function(){
 
     ws.onopen = function(){
         ws.send(JSON.stringify(welcome));
+
+        window.setInterval(function(){
+            let ping = {type : "ping"};
+            ws.send(JSON.stringify(ping));
+        }, 15000);
     }
     
     let dice = document.getElementsByClassName("die");
@@ -249,7 +254,9 @@ function displayMoves(message){
 function handleMessage(message){
     let jo = JSON.parse(message.data);
     console.log(jo);
-    if(jo.type == "welcomeResponse"){
+    if(jo.type == "pong"){
+        return;
+    } else if(jo.type == "welcomeResponse"){
         document.getElementById("roomName").innerHTML =
             userName + " playing in room " + jo.roomName;
     } else if(jo.type == "gameState"){
