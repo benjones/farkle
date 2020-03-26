@@ -19,8 +19,10 @@ struct Die {
 
 enum FirstTurnMinScore = 500;
 
+
+
 struct Player {
-    @safe: 
+    @safe:
     string name;
     int score;
     WebSocket ws;
@@ -67,7 +69,7 @@ struct LabeledScore {
     string description;
 
     
-    @safe:
+    @safe pure nothrow:
     LabeledScore opBinary(string op)(LabeledScore other) if(op == "+"){
         auto maybeAnd = other.description.length > 0 ? " and " : "";
         return LabeledScore(score + other.score, diceUsed + other.diceUsed,
@@ -76,6 +78,7 @@ struct LabeledScore {
 }
 
 struct Farkle {
+    @safe:
     private{
         Die[6] dice;
         Player[] players;
@@ -105,11 +108,11 @@ struct Farkle {
     }
     
 
-    ulong numPlayers(){
+    ulong numPlayers() pure @safe nothrow{
         return players.length;
     }
     
-    void addPlayer(Player p){
+    void addPlayer(Player p) {
         import std.array : insertInPlace;
         import std.range : empty;
         if(players.empty){
@@ -126,7 +129,7 @@ struct Farkle {
     
     void removePlayer(WebSocket socket){
         import std.array : replaceInPlace;
-        auto found = players.find!(a => a.ws == socket);
+        auto found = players.find!(a => a.ws is socket);
         auto index = players.length - found.length;
         players.replaceInPlace(index, index + 1, cast(Player[])[]);
         logInfo("players: %s", players.map!(a => a.toJson));
@@ -138,14 +141,14 @@ struct Farkle {
         }
     }
 
-    void initializeGame(){
+    void initializeGame() nothrow{
         whoseTurn = 0;
         startOfTurn = true;
         foreach(ref die; dice){
             die.held = false;
         }
     }
-    
+
     void messageAllPlayers(Json message){
         logInfo("messaging everyone: %s", message.toString);
         foreach(p; players){
@@ -157,13 +160,14 @@ struct Farkle {
         logInfo("messaging active player: %s", message.toString);
         players[whoseTurn].sendMessage(message);
     }
+
     
-    Player getPlayer(WebSocket socket){
-        return players.find!(a => a.ws == socket).front;
+    Player getPlayer(WebSocket socket) nothrow pure{
+        return players.find!(a => a.ws is socket).front;
     }
 
-    bool isMyTurn(WebSocket socket){
-        return players[whoseTurn].ws == socket;
+    bool isMyTurn(WebSocket socket) nothrow pure{
+        return players[whoseTurn].ws is socket;
     }
 
     Json legalMoves(){
@@ -187,65 +191,6 @@ struct Farkle {
         }
         return ret;
     }
-    
-    bool isLegalMove(Move move){
-        bool ret = move.match!(
-                    (Roll r) => legalRoll(r),
-                    (Stay s) => legalStay(),
-                    (NewRoll nr) => legalNewRoll(),
-                    (Steal s) => legalSteal()
-                           );
-        logInfo("was the move legal? %s", ret);
-        return ret;
-    }
-
-    bool legalRoll(Roll roll){
-        auto heldScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
-        return heldScore.score > 0;
-    }
-
-    bool legalStay(){
-
-        int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
-        const showingScore = scoreDice(showingDice);
-        return !startOfTurn &&
-            (players[whoseTurn].score >= FirstTurnMinScore ||
-             (turnScore + showingScore.score) >= FirstTurnMinScore);
-    }
-
-    bool legalNewRoll(){
-        if(startOfTurn) return true;
-        int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
-        const showingScore = scoreDice(showingDice);
-        return showingScore.diceUsed == showingDice.length;
-        
-    }
-
-    bool legalSteal(){
-        import std.algorithm : count;
-        
-        return startOfTurn &&
-            lastScore.score > 0 &&
-            (dice[].count!(a => a.held) < 6);
-    }
-    
-    void takeAction(Move move){
-        move.match!(
-                    (Roll r) => roll(r),
-                    (Stay s) => stay(s),
-                    (NewRoll nr) => newRoll(),
-                    (Steal s) => steal()
-                    );
-    }
-    
-    void nextPlayer(bool farkled){
-        whoseTurn = (whoseTurn +1) % players.length;
-        startOfTurn = true;
-        if(farkled){
-            scoringDice = [];
-            turnScore = 0;
-        }
-    }
 
     int[] rollFreeDice(){
         import std.random : uniform;
@@ -254,16 +199,19 @@ struct Farkle {
                 die.showing = uniform!"[]"(1,6);
             }
         }
-        
         return dice[].filter!(a => !a.held).map!(a => a.showing).array;
-
     }
 
-    void holdDice(int[] toHold){
-        foreach(hold; toHold){
-            dice[hold].held = true;
-        }
+        
+    void takeAction(Move move){
+        move.match!(
+                    (Roll r) => roll(r),
+                    (Stay s) => stay(s),
+                    (NewRoll nr) => newRoll(),
+                    (Steal s) => steal()
+                    );
     }
+
     
     void roll(Roll roll){
         logInfo("rolling with holds: %s", roll);
@@ -344,6 +292,62 @@ struct Farkle {
         
     }
     
+    nothrow:
+    bool isLegalMove(Move move){
+        bool ret = move.match!(
+                    (Roll r) => legalRoll(r),
+                    (Stay s) => legalStay(),
+                    (NewRoll nr) => legalNewRoll(),
+                    (Steal s) => legalSteal()
+                           );
+        logInfo("was the move legal? %s", ret);
+        return ret;
+    }
+
+    bool legalRoll(Roll roll){
+        auto heldScore = scoreDice(roll.newHolds.map!(a => dice[a].showing).array);
+        return heldScore.score > 0;
+    }
+
+    bool legalStay(){
+
+        int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
+        const showingScore = scoreDice(showingDice);
+        return !startOfTurn &&
+            (players[whoseTurn].score >= FirstTurnMinScore ||
+             (turnScore + showingScore.score) >= FirstTurnMinScore);
+    }
+
+    bool legalNewRoll(){
+        if(startOfTurn) return true;
+        int[] showingDice = dice[].filter!(a => !a.held).map!(a => a.showing).array;
+        const showingScore = scoreDice(showingDice);
+        return showingScore.diceUsed == showingDice.length;
+    }
+
+    bool legalSteal(){
+        import std.algorithm : count;
+
+        return startOfTurn &&
+            lastScore.score > 0 &&
+            (dice[].count!(a => a.held) < 6);
+    }
+
+    void nextPlayer(bool farkled){
+        whoseTurn = (whoseTurn +1) % players.length;
+        startOfTurn = true;
+        if(farkled){
+            scoringDice = [];
+            turnScore = 0;
+        }
+    }
+
+    void holdDice(int[] toHold){
+        foreach(hold; toHold){
+            dice[hold].held = true;
+        }
+    }
+
     LabeledScore scoreRoll(){
         import std.array;
         
