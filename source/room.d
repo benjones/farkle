@@ -19,6 +19,10 @@ class Room {
     ulong numPlayers(){
         return farkle.numPlayers;
     }
+
+    bool empty(){
+        return numPlayers == 0;
+    }
     
     void join(string name, WebSocket socket){
         farkle.addPlayer(Player(name, 0, socket));
@@ -27,8 +31,8 @@ class Room {
         }
     }
 
-    void leave(WebSocket socket){
-        farkle.removePlayer(socket);
+    bool leave(WebSocket socket){
+        return farkle.removePlayer(socket);
     }
 
     bool isMyTurn(WebSocket socket){

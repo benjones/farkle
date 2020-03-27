@@ -128,10 +128,13 @@ struct Farkle {
         sendUpdatesToPlayers();
     }
     
-    void removePlayer(WebSocket socket){
+    bool removePlayer(WebSocket socket){
         import std.array : replaceInPlace;
         auto found = players.find!(a => a.ws is socket);
         auto index = players.length - found.length;
+        if(found.empty){
+            return false; //not here
+        }
         if(index < whoseTurn){
             --whoseTurn; //skip this player
         }
@@ -140,7 +143,7 @@ struct Farkle {
         logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
         if(players.empty){
             initializeGame();
-            return;
+            return true;
         } else {
             assert(whoseTurn <= players.length);
             if(whoseTurn == players.length){
@@ -148,6 +151,7 @@ struct Farkle {
             }
         }
         sendUpdatesToPlayers();
+        return true;
     }
 
     void initializeGame() nothrow{
