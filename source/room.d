@@ -79,8 +79,7 @@ class Room {
             farkle.takeAction(move);
         }
 
-        farkle.messageAllPlayers(farkle.toJson);
-        farkle.messageActivePlayer(farkle.legalMoves);
+        farkle.sendUpdatesToPlayers();
         
     }
 

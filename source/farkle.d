@@ -124,21 +124,30 @@ struct Farkle {
         logInfo("players: %s", players.map!(a => a.toJson));
         logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
         logInfo("sending them: %s ", this.toJson);
-        p.sendMessage(this.toJson);
+
+        sendUpdatesToPlayers();
     }
     
     void removePlayer(WebSocket socket){
         import std.array : replaceInPlace;
         auto found = players.find!(a => a.ws is socket);
         auto index = players.length - found.length;
+        if(index < whoseTurn){
+            --whoseTurn; //skip this player
+        }
         players.replaceInPlace(index, index + 1, cast(Player[])[]);
         logInfo("players: %s", players.map!(a => a.toJson));
         logInfo("it's " ~ to!string(whoseTurn) ~ "'s turn");
         if(players.empty){
             initializeGame();
+            return;
         } else {
-            assert(whoseTurn < players.length);
+            assert(whoseTurn <= players.length);
+            if(whoseTurn == players.length){
+                whoseTurn = 0;
+            }
         }
+        sendUpdatesToPlayers();
     }
 
     void initializeGame() nothrow{
@@ -161,6 +170,11 @@ struct Farkle {
         players[whoseTurn].sendMessage(message);
     }
 
+
+    void sendUpdatesToPlayers(){
+        messageAllPlayers(this.toJson);
+        players[whoseTurn].sendMessage(legalMoves);
+    }
     
     Player getPlayer(WebSocket socket) nothrow pure{
         return players.find!(a => a.ws is socket).front;
