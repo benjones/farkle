@@ -22,4 +22,7 @@ rect {
     fill : red;
 }
 
-
+.activePlayer {
+    background-color: blue;
+    color: white;
+}

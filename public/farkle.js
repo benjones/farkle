@@ -133,6 +133,7 @@ function displayGameState(gameState){
         
         tbody.appendChild(tr);
     }
+    tbody.getElementsByTagName("tr")[gameState.whoseTurn].classList.add("activePlayer");
 
     let scoreBody = document.getElementById("scoresThisTurn");
     scoreBody.innerHTML = "";
