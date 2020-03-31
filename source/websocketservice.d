@@ -77,6 +77,9 @@ class WebsocketService {
                     socket.send(pong.toString);
                     logInfo("sent pong");
                     continue;
+                } else if(jo["type"].get!string == "chat"){
+                    room.broadcast(jo);
+                    continue;
                 }
                 
                 if(room.isMyTurn(socket)){

@@ -188,6 +188,14 @@ function clearDiceHandlers(){
     }
 }
 
+function sendMessage(){
+    let chatBox = document.getElementById("chatBox");
+    let mess = { type : "chat", user : userName, message : chatBox.value };
+    ws.send(JSON.stringify(mess));
+    chatBox.value = "";
+    return false;
+}
+
 function addDiceHandlers(){
     let dice = document.getElementsByClassName("die");
     for(let die of dice){
@@ -252,6 +260,15 @@ function displayMoves(message){
     
 }
 
+function displayChatMessage(message){
+
+    let chatDiv = document.getElementById("chatMessages");
+    let nd = document.createElement("div");
+    nd.appendChild(document.createTextNode(message.user + ": " + message.message));
+    chatDiv.appendChild(nd);
+    
+}
+
 function handleMessage(message){
     let jo = JSON.parse(message.data);
     console.log(jo);
@@ -264,5 +281,7 @@ function handleMessage(message){
         displayGameState(jo);
     } else if(jo.type == "yourTurn"){
         displayMoves(jo);
+    } else if(jo.type == "chat"){
+        displayChatMessage(jo);
     }
 }

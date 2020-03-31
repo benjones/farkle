@@ -38,4 +38,8 @@ html
 
         #moves
 
+        #chatArea
+            #chatMessages
+            form(action="room", method="POST", onsubmit="return sendMessage()")
+                input#chatBox(type="text", name="message", autofocus=true)
         script( type = 'text/javascript', src='farkle.js')

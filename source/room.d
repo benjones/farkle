@@ -38,6 +38,10 @@ class Room {
     bool isMyTurn(WebSocket socket){
         return farkle.isMyTurn(socket);
     }
+
+    void broadcast(Json message){
+        farkle.messageAllPlayers(message);
+    }
     
     void takeTurn(WebSocket ws, Json command){
         import std.algorithm : map;
